@@ -1,0 +1,53 @@
+name: seal-build
+
+on:
+  workflow_dispatch:
+    inputs:
+      test-filter:
+        description: Substring of Jasmine spec full names to run (empty runs the full suite)
+        required: false
+        default: ""
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "8.11.1"
+
+      - name: Install npm 6.10.0 (npm that packed the public tarball)
+        run: |
+          npm install -g npm@6.10.0
+          node --version
+          npm --version
+
+      - name: Fetch spec/vendor/objectDiff submodule at its pinned commit
+        run: |
+          git clone https://github.com/NV/objectDiff.js.git spec/vendor/objectDiff
+          git -C spec/vendor/objectDiff checkout 34b029831ef9079f0f61eda4fcac214f1ee0580c
+
+      - name: Build browser bundle (node build.js)
+        run: node build.js
+
+      - name: Test (Jasmine specs from spec/index.html, headless on Node)
+        env:
+          TEST_FILTER: ${{ inputs.test-filter }}
+        run: node .github/scripts/run-specs.js "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/spec/vendor/objectDiff"
+
+      - name: Pack
+        run: |
+          rm -rf spec/vendor/objectDiff build
+          mkdir -p dist
+          npm pack
+          mv cssom-0.4.4.tgz dist/
+          tar -tzf dist/cssom-0.4.4.tgz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cssom-0.4.4
+          path: dist/cssom-0.4.4.tgz
+          if-no-files-found: error
