@@ -55,5 +55,63 @@ describe('CSSStyleDeclaration', function() {
 		expect(d.cssText).toBe(cssText);
 	});
 
+	it('setProperty ignores a declaration named "length" instead of overwriting the declaration count', function() {
+		var d = new CSSOM.CSSStyleDeclaration;
+
+		d.setProperty('length', '2000000000');
+		expect(d.length).toBe(0);
+		expect(d[0]).toBeUndefined();
+		expect(d.cssText).toBe('');
+
+		d.setProperty('color', 'red');
+		d.setProperty('length', 5);
+		expect(d.length).toBe(1);
+		expect(d[1]).toBeUndefined();
+		expect(d.cssText).toBe('color: red;');
+	});
+
+	it('parse keeps the declaration count intact for a{length:2000000000}', function() {
+		var rule = CSSOM.parse('a{length:2000000000}').cssRules[0];
+		expect(rule.style.length).toBe(0);
+		expect(rule.style.cssText).toBe('');
+		expect(rule.cssText).toBe('a {}');
+
+		rule = CSSOM.parse('a{color: red; length: 2000000000; width: 1px}').cssRules[0];
+		expect(rule.style.length).toBe(2);
+		expect(rule.style.cssText).toBe('color: red; width: 1px;');
+	});
+
+	it('cssText setters ignore a declaration named "length"', function() {
+		var d = new CSSOM.CSSStyleDeclaration;
+		d.cssText = 'length: 2000000000; color: red';
+		expect(d.length).toBe(1);
+		expect(d.cssText).toBe('color: red;');
+
+		var rule = new CSSOM.CSSStyleRule;
+		rule.cssText = 'a{length:2000000000}';
+		expect(rule.style.length).toBe(0);
+		expect(rule.cssText).toBe('a {}');
+	});
+
+	it('declarations cannot overwrite parentRule or _importants', function() {
+		var rule = CSSOM.parse('a{parentRule: x; _importants: y; color: red !important}').cssRules[0];
+		expect(rule.style.parentRule).toBe(rule);
+		expect(rule.style.length).toBe(1);
+		expect(rule.style.getPropertyPriority('color')).toBe('important');
+		expect(rule.style.cssText).toBe('color: red !important;');
+	});
+
+	it('declarations cannot shadow CSSStyleDeclaration methods or accessors', function() {
+		var style;
+		expect(function() {
+			style = CSSOM.parse('a{setProperty: x; getPropertyValue: y; cssText: z; constructor: w; __proto__: v; color: red}').cssRules[0].style;
+		}).not.toThrow();
+		expect(style.length).toBe(1);
+		expect(style.setProperty).toBe(CSSOM.CSSStyleDeclaration.prototype.setProperty);
+		expect(style.getPropertyValue).toBe(CSSOM.CSSStyleDeclaration.prototype.getPropertyValue);
+		expect(style.constructor).toBe(CSSOM.CSSStyleDeclaration);
+		expect(style.cssText).toBe('color: red;');
+	});
+
 });
 });
